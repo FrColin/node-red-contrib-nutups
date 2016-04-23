@@ -1,0 +1,182 @@
+<script type="text/javascript">
+            
+    RED.nodes.registerType('nutups', {
+        category: 'sensors',
+        color: '#ffcc66',
+        defaults: {
+            name: {value: ""},
+            host: {value: "localhost", required: true},
+            port: {value: 3493, required: true,validate:RED.validators.number()},
+            upsname: {value: "ups", required: true},
+            vars: {value:[]}            
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "light.png",
+        label: function() {
+            return this.name || "nutups";
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function() {
+            function generateRow(i,varname) {
+                var container = $('<li/>',{style:"margin:0; padding:8px 0px; border-bottom: 1px solid #ccc;"});
+                var row = $('<div/>',{class:"node-input-var-row"}).appendTo(container);
+                var row2 = $('<div/>',{style:"padding-top: 5px;"}).appendTo(container);
+
+                var checkBox = $('<input/>',{id:"node-input-var-cb"+i,type:"checkbox",style:"margin: 5px; width: auto"}).appendTo(row);
+                checkBox.data('varname', varname);
+                var varField = $('<label/>',{for:"node-input-var-cb"+i,style:"width:auto"}).text(varname).appendTo(row);
+                $("#node-input-vars-container").append(container);
+            };
+            var node = this;
+            function refreshVars(currentVars) {
+                 var params = {
+                    "host": $('#node-input-host').val(),
+                    "port": $('#node-input-port').val(),
+                    "upsname": $('#node-input-upsname').val()
+                };
+
+
+                if (!params['host']) {
+                    $('#nut-status small').html("No host set");
+                    return;
+                } else if (!params['port']) {
+                    $('#nut-status small').html("No port set");
+                    return;
+                } else {
+                    $('#nut-status small').html("Connecting...");
+                }
+
+                $("#node-input-vars-container").empty();
+                $.getJSON("/nutups/allvars?"+$.param(params)).done(function(data) {
+                    if (data['error']) {
+                        $('#owfs-status small').html("Error: "+data['error']);
+                    } else if (data['varCount'] > 0) {
+                        $.each(data["vars"], generateRow);
+                        $('#node-input-paths-container input:checkbox').each( function() {
+                            var checkbox = $(this);
+                            if ($.inArray(checkbox.data('varname'), currentvars) != -1) {
+                                checkbox.prop('checked', true);
+                            }
+                        });
+                        $('#nut-status small').html("Successfully read "+data["varCount"]+" Variables.");
+                    } else {
+                        $('#nut-status small').html("No Ups Variables found.");
+                    }
+                }).fail(function(jqxhr) {
+                    if (jqxhr.status == 0) {
+                        $('#nut-status small').html("Failed to connect to Node-RED");
+                    } else {
+                        $('#nut-status small').html(jqxhr.status+": "+jqxhr.statusText);
+                    }
+                });
+               
+            };
+
+            function switchDialogResize(ev,ui) {
+                $("#node-input-vars-container-div").css("height",(ui.size.height-260)+"px");
+            };
+
+            $( "#dialog" ).on("dialogresize", switchDialogResize);
+            $( "#dialog" ).one("dialogopen", function(ev) {
+                var size = $( "#dialog" ).dialog('option','sizeCache-switch');
+                if (size) {
+                    switchDialogResize(null,{size:size});
+                }
+            });
+            $( "#dialog" ).one("dialogclose", function(ev,ui) {
+                $( "#dialog" ).off("dialogresize",switchDialogResize);
+            });
+
+            $("#node-input-refresh-vars").click( function() {
+                var currentVars = $('#node-input-vars-container input:checked').map( function() {
+                    return $(this).data('varname');
+                });
+                refreshVars(currentVars);
+            });
+
+            $("#node-input-select-none").click( function() {
+                $('#node-input-vars-container input:checked').each( function() {
+                    $(this).prop('checked', false);
+                });
+            });
+
+            $("#node-input-select-all").click( function() {
+                $('#node-input-vars-container input:checkbox').each( function() {
+                    $(this).prop('checked', true);
+                });
+            });
+
+            function checkVarsMatching(regexp) {
+                $('#node-input-vars-container input:checkbox').each( function() {
+                    var checkbox = $(this);
+                    if (checkbox.data('varname').match(regexp)) {
+                        checkbox.prop('checked', true);
+                    }
+                });
+            }
+
+            $("#node-input-select-battery").click( function() {
+                checkVarsMatching(/^battery*/);
+            });
+
+            $("#node-input-select-ups").click( function() {
+                checkVarsMatching(/^ups*/);
+            });
+
+            refreshVars(this.vars);
+        },
+        oneditsave: function() {
+            this.vars = $('#node-input-vars-container input:checked').map( function() {
+                return $(this).data('varname');
+            }).toArray();
+            console.log("save "+typeof this.vars);
+        }
+
+    });
+</script>
+
+<script type="text/x-red" data-template-name="nutups">
+    <div class="form-row">
+        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-host"><i class="icon-file"></i> host</label>
+        <input type="text" id="node-input-host" placeholder="host">
+    </div>
+    <div class="form-row">
+        <label for="node-input-port"><i class="icon-exchange"></i> Address</label>
+        <input type="text" id="node-input-port" placeholder="port">
+    </div>
+    <div class="form-row">
+        <label for="node-input-upsname"><i class="icon-exchange"></i> UpsName</label>
+        <input type="text" id="node-input-upsname" placeholder="upsname">
+    </div>
+    <div class="form-row" style="margin-top: 25px">
+        <div class="btn-group">
+            <a class="btn btn-mini dropdown-toggle" data-toggle="dropdown" href="#"><i class="icon-align-justify"></i> Select <span class="caret"></span></a>
+            <ul class="dropdown-menu">
+                <li><a id='node-input-select-none' href="#">None</a></li>
+                <li><a id='node-input-select-all' href="#">All</a></li>
+                <li><a id='node-input-select-battery' href="#">All Battery</a></li>
+                <li><a id='node-input-select-ups' href="#">All Ups</a></li>
+            </ul>
+        </div>
+        <a class="btn btn-mini" id="node-input-refresh-vars" href="#"><i class="icon-refresh"></i> Refresh</a>
+        <span id="nut-status"><small></small></span>
+    </div>
+    <div class="form-row">
+        <div id="node-input-vars-container-div" style="border-radius: 5px; height: 310px; padding: 5px; border: 1px solid #ccc; overflow-y:scroll;">
+        <ol id="node-input-vars-container" style="list-style-type:none; margin: 0;">
+        </ol>
+        </div>
+    </div>
+
+</script>
+
+<script type="text/x-red" data-help-name="nutups">
+    <p>A node that reads from a NUT server.</p>
+</script>

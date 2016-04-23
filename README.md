@@ -9,8 +9,8 @@ npm install node-red-contrib-nutups
 
 # Configuration
 
-Apart from the usual name, the node has `host`,`port`,`upsname` and
-vars properties. 
+Apart from the usual name, 
+the node has `host`,`port`,`upsname` and vars properties. 
 These default to `localhost`, `3493`, `ups`, ``  respectively.
 
 # Usage
